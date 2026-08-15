@@ -276,7 +276,7 @@ fun MarketplaceScreen(
     }
 
     if (showPostModal) {
-        PostItemModal(
+        FullScreenPostItemScreen(
             viewModel = viewModel,
             onDismiss = { viewModel.showPostItemModal.value = false }
         )

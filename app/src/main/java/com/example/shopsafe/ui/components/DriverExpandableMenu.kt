@@ -40,8 +40,14 @@ fun DriverExpandableMenuSheet(
 ) {
     val shortcuts = listOf(
         DriverShortcutItem("MAP", "Live Map", Icons.Default.Map, null, Color(0xFF10B981)),
+        DriverShortcutItem("SHOPSAFE_CARD", "ShopSafe Card", Icons.Default.CreditCard, "Stripe", Color(0xFF6366F1)),
         DriverShortcutItem("ORDERS", "Available Orders", Icons.Default.ListAlt, "8 New", Color(0xFF0284C7)),
         DriverShortcutItem("ACTIVE", "Active Trip", Icons.Default.Navigation, null, Color(0xFFF59E0B)),
+        DriverShortcutItem("RECEIPTS", "Receipt Scanner", Icons.Default.DocumentScanner, "OCR", Color(0xFF10B981)),
+        DriverShortcutItem("STRIPE_ADMIN", "Issuing Admin", Icons.Default.AdminPanelSettings, "Live/Test", Color(0xFFF59E0B)),
+        DriverShortcutItem("TAX_CENTER", "Earnings & Taxes", Icons.Default.AccountBalance, "1099", Color(0xFF38BDF8)),
+        DriverShortcutItem("MEDIA_VAULT", "Delivery Vault", Icons.Default.Shield, "AES", Color(0xFF8B5CF6)),
+        DriverShortcutItem("BIZ_ACCOUNTING", "QuickBooks Sync", Icons.Default.Sync, "QB", Color(0xFF22C55E)),
         DriverShortcutItem("EARNINGS", "Earnings & Payout", Icons.Default.AccountBalanceWallet, "$142.50", Color(0xFF34D399)),
         DriverShortcutItem("MILEAGE", "Mileage Log", Icons.Default.DirectionsCar, "Tax $", Color(0xFF38BDF8)),
         DriverShortcutItem("HISTORY", "Activity History", Icons.Default.History, null, Color(0xFF94A3B8)),

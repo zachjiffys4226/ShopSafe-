@@ -47,13 +47,24 @@ class ShopSafeApplication : Application(), ImageLoaderFactory {
         } catch (e: Throwable) {
             Log.d("ShopSafeApp", "MapsInitializer notice: ${e.message}")
         }
+
+        // 3. Initialize Stripe Android SDK PaymentConfiguration safely
+        try {
+            com.stripe.android.PaymentConfiguration.init(
+                applicationContext,
+                "pk_test_51OzShopSafeIssuingSandbox"
+            )
+            Log.d("ShopSafeApp", "Stripe Android SDK PaymentConfiguration initialized.")
+        } catch (e: Throwable) {
+            Log.w("ShopSafeApp", "Stripe initialization notice: ${e.message}")
+        }
     }
 
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
             .memoryCache {
                 MemoryCache.Builder(this)
-                    .maxSizePercent(0.25)
+                    .maxSizePercent(0.20)
                     .build()
             }
             .diskCache {
@@ -62,7 +73,7 @@ class ShopSafeApplication : Application(), ImageLoaderFactory {
                     .maxSizeBytes(50L * 1024 * 1024) // 50 MB
                     .build()
             }
-            .allowHardware(true)
+            .allowHardware(false) // Prevents ashmem pinning issues in virtualized graphics environments
             .crossfade(true)
             .build()
     }
@@ -70,8 +81,10 @@ class ShopSafeApplication : Application(), ImageLoaderFactory {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         try {
-            if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
-                coil.Coil.imageLoader(this).memoryCache?.clear()
+            val loader = coil.Coil.imageLoader(this)
+            loader.memoryCache?.trimMemory(level)
+            if (level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE) {
+                loader.memoryCache?.clear()
             }
         } catch (e: Exception) {
             Log.d("ShopSafeApp", "Memory trim handled: ${e.message}")

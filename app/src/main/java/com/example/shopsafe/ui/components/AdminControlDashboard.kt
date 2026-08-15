@@ -186,6 +186,71 @@ fun AdminControlDashboard(
                             }
                         }
 
+                        // Stripe Issuing Commercial Card Program Admin Hub
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.CreditCard,
+                                            contentDescription = "Stripe Issuing",
+                                            tint = Color(0xFF6366F1),
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            "Stripe Issuing Card Program",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp
+                                        )
+                                    }
+
+                                    Surface(
+                                        color = Color(0xFF10B981).copy(alpha = 0.2f),
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text(
+                                            "SECURE API",
+                                            color = Color(0xFF34D399),
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = "Manage commercial cards, dynamic authorization rules, daily spending caps, 3-way receipt reconciliation, and server-side keys.",
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 11.sp
+                                )
+
+                                Button(
+                                    onClick = {
+                                        viewModel.showAdminStripeIssuingModal.value = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Tune, contentDescription = "Open Stripe Hub", tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Open Stripe Issuing Admin Console", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
                         // Danger Zone Control Card
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
