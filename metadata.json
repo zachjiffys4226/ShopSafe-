@@ -1,0 +1,6 @@
+{
+  "name": "ShopSafe",
+  "description": "Local marketplace, express storefront delivery, and real-time driver portal with automated Stripe Connect payouts, Google Maps SDK optimized delivery routing, and Cloud Firestore sync.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
