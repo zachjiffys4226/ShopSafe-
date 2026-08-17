@@ -28,6 +28,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.shopsafe.ui.ShopSafeViewModel
+import com.example.shopsafe.ui.components.GoogleLogo
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import com.example.shopsafe.ui.utils.TwoFactorCodeVisualTransformation
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -285,7 +289,7 @@ fun LandingScreen(
                                 emailInput = it
                                 errorMessage = null
                             },
-                            label = { Text(if (isRegisterMode) "Email Address" else "Email Address or Access Code") },
+                            label = { Text("Email") },
                             leadingIcon = {
                                 Icon(
                                     Icons.Default.Email,
@@ -621,31 +625,78 @@ fun LandingScreen(
                             onClick = { viewModel.loginWithFacebook() },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(48.dp),
+                                .height(48.dp)
+                                .testTag("landing_facebook_sign_in_button"),
                             shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(0.dp)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Text("Facebook", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1877F2))
+                            Icon(
+                                imageVector = Icons.Default.Facebook,
+                                contentDescription = "Facebook Logo",
+                                tint = Color(0xFF1877F2),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Facebook",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1877F2),
+                                modifier = Modifier.semantics {
+                                    contentDescription = "Sign in with Facebook"
+                                }
+                            )
                         }
                         OutlinedButton(
                             onClick = { viewModel.loginWithGoogle() },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(48.dp),
+                                .height(48.dp)
+                                .testTag("landing_google_sign_in_button"),
                             shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(0.dp)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Text("Google", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFEA4335))
+                            GoogleLogo(
+                                modifier = Modifier.semantics {
+                                    contentDescription = "Google Logo"
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Google",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFEA4335),
+                                modifier = Modifier.semantics {
+                                    contentDescription = "Sign in with Google"
+                                }
+                            )
                         }
                         OutlinedButton(
                             onClick = { viewModel.loginWithApple() },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(48.dp),
+                                .height(48.dp)
+                                .testTag("landing_apple_sign_in_button"),
                             shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(0.dp)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Text("Apple ID", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                            Icon(
+                                painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.ic_apple_logo),
+                                contentDescription = "Apple Logo",
+                                tint = Color.Black,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Apple ID",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black,
+                                modifier = Modifier.semantics {
+                                    contentDescription = "Sign in with Apple ID"
+                                }
+                            )
                         }
                     }
 

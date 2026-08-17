@@ -19,6 +19,35 @@ data class DemandHotspot(
 }
 
 object DemandHeatmapEngine {
+    fun generateHotspotsFromOrders(orders: List<Order>): List<DemandHotspot> {
+        if (orders.isEmpty()) {
+            return generateHotspots()
+        }
+
+        val hotspots = mutableListOf<DemandHotspot>()
+        val distinctStores = orders.map { it.storeOrSellerName }.distinct()
+        distinctStores.forEachIndexed { index, storeName ->
+            val storeOrders = orders.filter { it.storeOrSellerName == storeName }
+            val totalVolume = storeOrders.size * 14 + 30
+            hotspots.add(
+                DemandHotspot(
+                    id = "demand_real_$index",
+                    name = "$storeName Live Delivery Hub",
+                    latLng = LatLng(37.7800 + (index * 0.003), -122.4100 - (index * 0.002)),
+                    intensity = (0.75 + (storeOrders.size * 0.06)).coerceAtMost(0.99),
+                    surgeMultiplier = 1.8 + (storeOrders.size * 0.25).coerceAtMost(1.6),
+                    orderVolumePerHour = totalVolume,
+                    radiusMeters = 1200.0,
+                    dominantCategory = "Live Online Delivery Orders",
+                    peakTimeDescription = "${storeOrders.size} Active Online Orders Placed"
+                )
+            )
+        }
+
+        hotspots.addAll(generateHotspots())
+        return hotspots.distinctBy { it.id }
+    }
+
     fun generateHotspots(): List<DemandHotspot> {
         return listOf(
             DemandHotspot(

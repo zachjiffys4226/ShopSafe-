@@ -67,11 +67,6 @@ data class DriverOpportunityHotspot(
     val demandOrdersAvailable: Int = 8,
     val demandTypicalHourlyPay: Double = 28.50,
     val expectedDemandLevel: String = "High",
-    val demandCategoryLabel: String = "High Demand",
-    val estimatedWaitTimeText: String = "Estimated Order: 5–10 min",
-    val activeCouriersNearby: Int = 4,
-    val recentOrderFrequencyPerHour: Int = 24,
-    val storeActivityScore: Int = 92,
     val isMarketplaceDelivery: Boolean = type == DriverHotspotType.MARKETPLACE_ITEM || type == DriverHotspotType.PERSON_TO_PERSON,
     val isScheduled: Boolean = false,
     val scheduledTimeText: String = "Immediate",
@@ -155,6 +150,46 @@ data class SafetyIncidentReport(
  */
 object DriverOpportunityEngine {
 
+    fun generateOpportunityHotspotsFromOrders(orders: List<Order>): List<DriverOpportunityHotspot> {
+        val hotspots = mutableListOf<DriverOpportunityHotspot>()
+        if (orders.isNotEmpty()) {
+            orders.forEachIndexed { index, order ->
+                val hotspotType = if (order.storeOrSellerName.contains("Grocery", ignoreCase = true) || 
+                                      order.storeOrSellerName.contains("Walmart", ignoreCase = true) ||
+                                      order.storeOrSellerName.contains("Market", ignoreCase = true)) {
+                    DriverHotspotType.STORE_ORDER
+                } else {
+                    DriverHotspotType.RESTAURANT_ORDER
+                }
+
+                hotspots.add(
+                    DriverOpportunityHotspot(
+                        id = "real_hotspot_${order.id}",
+                        title = "🚀 Live Order: ${order.storeOrSellerName} ($${String.format(Locale.US, "%.2f", order.total)})",
+                        type = hotspotType,
+                        latLng = LatLng(37.7749 + (index * 0.002), -122.4194 - (index * 0.0015)),
+                        payAmount = order.total * 0.25 + 12.50,
+                        distanceMiles = 1.2 + (index * 0.4),
+                        estimatedMins = 12 + (index * 3),
+                        pickupAddress = order.pickupAddress,
+                        dropoffAddress = order.dropoffAddress,
+                        storeOrSellerName = order.storeOrSellerName,
+                        customerName = order.customerName,
+                        itemCount = order.itemsSummary.split(",").size.coerceAtLeast(1),
+                        itemSummary = order.itemsSummary,
+                        specialInstructions = order.deliveryInstructions.ifBlank { "Real-time online order placed via ShopSafe." },
+                        isSurge = order.total > 40.0,
+                        isHighDemandZone = false,
+                        demandOrdersAvailable = 1,
+                        stopsCount = 1
+                    )
+                )
+            }
+        }
+        hotspots.addAll(generateMapAmenitiesAndSurgeZones())
+        return hotspots
+    }
+
     /**
      * Map hotspots visible to driver: ONLY Demand Surge Zones and Driver Amenities (Gas, Hub).
      * Individual orders are NOT shown on the map for drivers to pick; instead orders are dispatched automatically via pings.
@@ -165,118 +200,54 @@ object DriverOpportunityEngine {
 
     fun generateMapAmenitiesAndSurgeZones(): List<DriverOpportunityHotspot> {
         return listOf(
-            // 1. Very High Demand Surge Zone
+            // 1. High-Demand Surge Bonus Zone
             DriverOpportunityHotspot(
                 id = "hotspot_surge_1",
-                title = "🔥 Downtown / Union Square Surge (+$3.50)",
+                title = "🔥 High Demand Surge Zone (+$3.00 Bonus)",
                 type = DriverHotspotType.HIGH_DEMAND_SURGE,
                 latLng = LatLng(37.7876, -122.4093),
-                payAmount = 32.00,
+                payAmount = 29.00,
                 distanceMiles = 1.1,
                 estimatedMins = 5,
                 storeOrSellerName = "Downtown / Union Square Surge Hub",
-                pickupAddress = "Union Square Retail & Grocery Corridor",
+                pickupAddress = "Union Square Delivery Corridor",
                 dropoffAddress = "Surrounding SF Metro Area",
-                itemCount = 18,
-                itemSummary = "18 Active Orders • Peak Evening Rush",
+                itemCount = 14,
+                itemSummary = "14 Live Orders Waiting • High Tip Density",
                 requiredVehicleType = "Any",
-                specialInstructions = "Heavy order flow! Extra $3.50 surge bonus added to all completed trips.",
+                specialInstructions = "High order volume in this 1-mile radius! Extra $3.00 bonus added to all completed trips.",
                 isSurge = true,
                 isHighDemandZone = true,
-                demandOrdersAvailable = 18,
-                demandTypicalHourlyPay = 36.50,
-                expectedDemandLevel = "Very High Demand",
-                demandCategoryLabel = "Very High Demand",
-                estimatedWaitTimeText = "Estimated Order: 2–5 min",
-                activeCouriersNearby = 6,
-                recentOrderFrequencyPerHour = 32,
-                storeActivityScore = 98,
+                demandOrdersAvailable = 14,
+                demandTypicalHourlyPay = 34.50,
+                expectedDemandLevel = "Very High (Peak Surge)",
                 stopsCount = 1
             ),
 
-            // 2. High Demand Zone
+            // 2. Mission District Surge Zone
             DriverOpportunityHotspot(
                 id = "hotspot_surge_2",
-                title = "⚡ Mission District Food & Grocery",
+                title = "🔥 Mission Food Surge (+$2.50 Bonus)",
                 type = DriverHotspotType.HIGH_DEMAND_SURGE,
                 latLng = LatLng(37.7600, -122.4190),
                 payAmount = 26.50,
                 distanceMiles = 1.8,
                 estimatedMins = 8,
-                storeOrSellerName = "Mission Culinary & Retail Corridor",
+                storeOrSellerName = "Mission Culinary Corridor",
                 pickupAddress = "Valencia & 16th St Hub",
                 dropoffAddress = "SF Central Corridor",
-                itemCount = 11,
+                itemCount = 9,
                 itemSummary = "Active Dinner Rush • Rapid Dispatching",
                 requiredVehicleType = "Any",
                 isSurge = true,
                 isHighDemandZone = true,
-                demandOrdersAvailable = 11,
+                demandOrdersAvailable = 9,
                 demandTypicalHourlyPay = 31.00,
                 expectedDemandLevel = "High Demand",
-                demandCategoryLabel = "High Demand",
-                estimatedWaitTimeText = "Estimated Order: 5–10 min",
-                activeCouriersNearby = 4,
-                recentOrderFrequencyPerHour = 22,
-                storeActivityScore = 88,
                 stopsCount = 1
             ),
 
-            // 3. Moderate Demand Zone
-            DriverOpportunityHotspot(
-                id = "hotspot_mod_1",
-                title = "📦 SOMA Tech & Marketplace Zone",
-                type = DriverHotspotType.LOCAL_SELLER,
-                latLng = LatLng(37.7780, -122.3960),
-                payAmount = 21.00,
-                distanceMiles = 1.5,
-                estimatedMins = 7,
-                storeOrSellerName = "SOMA Commercial Corridor",
-                pickupAddress = "2nd & Folsom St",
-                dropoffAddress = "South Beach / Embarcadero",
-                itemCount = 5,
-                itemSummary = "Steady Marketplace & Convenience Dispatches",
-                requiredVehicleType = "Any",
-                isHighDemandZone = false,
-                demandOrdersAvailable = 5,
-                demandTypicalHourlyPay = 25.00,
-                expectedDemandLevel = "Moderate Demand",
-                demandCategoryLabel = "Moderate Demand",
-                estimatedWaitTimeText = "Estimated Order: 10–20 min",
-                activeCouriersNearby = 3,
-                recentOrderFrequencyPerHour = 12,
-                storeActivityScore = 65,
-                stopsCount = 1
-            ),
-
-            // 4. Low Demand Zone
-            DriverOpportunityHotspot(
-                id = "hotspot_low_1",
-                title = "🌿 Presidio Residential Perimeter",
-                type = DriverHotspotType.STORE_ORDER,
-                latLng = LatLng(37.7980, -122.4660),
-                payAmount = 18.00,
-                distanceMiles = 2.9,
-                estimatedMins = 12,
-                storeOrSellerName = "Presidio Heights Local",
-                pickupAddress = "California & Presidio Ave",
-                dropoffAddress = "Outer Richmond",
-                itemCount = 2,
-                itemSummary = "Occasional Local Delivery Requests",
-                requiredVehicleType = "Any",
-                isHighDemandZone = false,
-                demandOrdersAvailable = 2,
-                demandTypicalHourlyPay = 20.00,
-                expectedDemandLevel = "Low Demand",
-                demandCategoryLabel = "Low Demand",
-                estimatedWaitTimeText = "Longer Wait Expected",
-                activeCouriersNearby = 1,
-                recentOrderFrequencyPerHour = 4,
-                storeActivityScore = 35,
-                stopsCount = 1
-            ),
-
-            // 5. Gas Station Amenity Stop
+            // 3. Gas Station Amenity Stop
             DriverOpportunityHotspot(
                 id = "hotspot_gas_1",
                 title = "⛽ Chevron Fast Fuel ($4.39/gal)",
@@ -291,12 +262,10 @@ object DriverOpportunityEngine {
                 gasPrice = 4.39,
                 gasStationBrand = "Chevron (ShopSafe 5% Cashback with Safe Card)",
                 itemSummary = "Lowest fuel prices nearby + Clean Restrooms + Air Pump",
-                demandCategoryLabel = "Driver Amenity",
-                estimatedWaitTimeText = "Fuel & Air Pump Open",
                 stopsCount = 1
             ),
 
-            // 6. Driver Support & Resource Center
+            // 4. Driver Support & Resource Center
             DriverOpportunityHotspot(
                 id = "hotspot_sup_1",
                 title = "🛡️ ShopSafe Driver Support Center",
@@ -309,8 +278,6 @@ object DriverOpportunityEngine {
                 pickupAddress = "500 Howard St, Suite 200, San Francisco, CA",
                 dropoffAddress = "Driver Operations Desk",
                 itemSummary = "Free Thermal Delivery Bags + Safe Card Replacements + Live Agent Help",
-                demandCategoryLabel = "Driver Hub",
-                estimatedWaitTimeText = "Walk-ins Welcome",
                 stopsCount = 1
             )
         )

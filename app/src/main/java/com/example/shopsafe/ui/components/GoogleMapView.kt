@@ -404,46 +404,48 @@ fun GoogleMapView(
 
                     // Map Tools: Theme Toggle, Traffic Toggle, Surge Overlay Toggle & Recenter
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = { isSurgeOverlayEnabled = !isSurgeOverlayEnabled },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Bolt,
-                                contentDescription = "Toggle Real-Time Surge Pricing Overlay",
-                                tint = if (isSurgeOverlayEnabled) Color(0xFFF59E0B) else Color.Gray,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                        if (showSurgeOverlay) {
+                            IconButton(
+                                onClick = { isSurgeOverlayEnabled = !isSurgeOverlayEnabled },
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Bolt,
+                                    contentDescription = "Toggle Real-Time Surge Pricing Overlay",
+                                    tint = if (isSurgeOverlayEnabled) Color(0xFFF59E0B) else Color.Gray,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
 
-                        IconButton(
-                            onClick = {
-                                sleekThemeMode = when (sleekThemeMode) {
-                                    SleekMapThemeMode.SLEEK_DARK -> SleekMapThemeMode.SLEEK_LIGHT
-                                    SleekMapThemeMode.SLEEK_LIGHT -> SleekMapThemeMode.STANDARD
-                                    SleekMapThemeMode.STANDARD -> SleekMapThemeMode.SLEEK_DARK
-                                }
-                            },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Palette,
-                                contentDescription = "Toggle Map Theme mode",
-                                tint = if (sleekThemeMode != SleekMapThemeMode.STANDARD) Color(0xFF38BDF8) else Color.Gray,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                            IconButton(
+                                onClick = {
+                                    sleekThemeMode = when (sleekThemeMode) {
+                                        SleekMapThemeMode.SLEEK_DARK -> SleekMapThemeMode.SLEEK_LIGHT
+                                        SleekMapThemeMode.SLEEK_LIGHT -> SleekMapThemeMode.STANDARD
+                                        SleekMapThemeMode.STANDARD -> SleekMapThemeMode.SLEEK_DARK
+                                    }
+                                },
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Palette,
+                                    contentDescription = "Toggle Map Theme mode",
+                                    tint = if (sleekThemeMode != SleekMapThemeMode.STANDARD) Color(0xFF38BDF8) else Color.Gray,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
 
-                        IconButton(
-                            onClick = { isTrafficLayerEnabled = !isTrafficLayerEnabled },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Traffic,
-                                contentDescription = "Toggle Real-Time Traffic Layer",
-                                tint = if (isTrafficLayerEnabled) Color(0xFF4ADE80) else Color.Gray,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            IconButton(
+                                onClick = { isTrafficLayerEnabled = !isTrafficLayerEnabled },
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Traffic,
+                                    contentDescription = "Toggle Real-Time Traffic Layer",
+                                    tint = if (isTrafficLayerEnabled) Color(0xFF4ADE80) else Color.Gray,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
 
                         IconButton(

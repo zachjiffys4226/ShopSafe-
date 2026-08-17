@@ -26,26 +26,11 @@ android {
 
   signingConfigs {
     create("release") {
-      val customPath = System.getenv("KEYSTORE_PATH")
-      val uploadKey = file("${rootDir}/my-upload-key.jks")
-      val debugKey = file("${rootDir}/debug.keystore")
-
-      if (!customPath.isNullOrBlank() && file(customPath).exists()) {
-        storeFile = file(customPath)
-        storePassword = System.getenv("STORE_PASSWORD") ?: "android"
-        keyAlias = "upload"
-        keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
-      } else if (uploadKey.exists()) {
-        storeFile = uploadKey
-        storePassword = System.getenv("STORE_PASSWORD") ?: "android"
-        keyAlias = "upload"
-        keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
-      } else if (debugKey.exists()) {
-        storeFile = debugKey
-        storePassword = "android"
-        keyAlias = "androiddebugkey"
-        keyPassword = "android"
-      }
+      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
+      storeFile = file(keystorePath)
+      storePassword = System.getenv("STORE_PASSWORD")
+      keyAlias = "upload"
+      keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
@@ -74,11 +59,6 @@ android {
     buildConfig = true
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
-  bundle {
-    language { enableSplit = false }
-    density { enableSplit = true }
-    abi { enableSplit = true }
-  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
@@ -141,7 +121,7 @@ dependencies {
   implementation(libs.play.services.maps)
   implementation(libs.maps.compose)
   implementation(libs.retrofit)
-  implementation(libs.stripe.android)
+  implementation("com.stripe:stripe-android:20.35.0")
   // testImplementation(libs.androidx.compose.ui.test.junit4)
   // testImplementation(libs.androidx.core)
   // testImplementation(libs.androidx.junit)

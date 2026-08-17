@@ -518,6 +518,10 @@ class ShopSafeRepository(
         dao.updateThreadLastMessage(threadId, snippet, System.currentTimeMillis())
     }
 
+    suspend fun insertDriverOffers(offers: List<DriverOffer>) {
+        dao.insertDriverOffers(offers)
+    }
+
     suspend fun addStorefront(store: Storefront) {
         dao.insertStorefronts(listOf(store))
     }

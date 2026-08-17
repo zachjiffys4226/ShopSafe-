@@ -9,13 +9,6 @@ import com.example.shopsafe.data.models.*
 import com.example.shopsafe.data.repository.GeminiService
 import com.example.shopsafe.data.repository.ShopSafeRepository
 import com.example.shopsafe.data.session.UserSessionManager
-import com.example.shopsafe.data.stripe.IStripeService
-import com.example.shopsafe.data.stripe.ShopSafeStripeIssuingService
-import com.example.shopsafe.data.stripe.StripeIssuingTokenizationManager
-import com.example.shopsafe.data.stripe.StripePaymentProvider
-import com.example.shopsafe.data.stripe.StripeService
-import com.example.shopsafe.data.stripe.StripeServiceError
-import com.example.shopsafe.data.stripe.StripeServiceErrorWrapper
 import com.example.shopsafe.data.util.AppLanguage
 import com.example.shopsafe.data.util.NetworkConnectivityObserver
 import com.example.shopsafe.data.util.NetworkStatus
@@ -52,11 +45,21 @@ class ShopSafeViewModel(application: Application) : AndroidViewModel(application
     val sessionManager: UserSessionManager = UserSessionManager(application)
     val currentUser = MutableStateFlow<AuthUser?>(null)
 
-    // Automated Order Dispatch Ping Pool & State
-    private val dispatchOffersPool = mutableListOf<DriverOffer>()
-    private var currentDispatchOfferIndex = 0
+    private val _stripeEnvironment = MutableStateFlow("TEST") // TEST or LIVE
+    val stripeEnvironment: StateFlow<String> = _stripeEnvironment.asStateFlow()
+
+    fun setStripeEnvironment(env: String) {
+        _stripeEnvironment.value = env
+        com.example.shopsafe.util.AppConfig.isStripeLiveMode = (env == "LIVE")
+        
+        val stripeKey = com.example.shopsafe.util.AppConfig.stripeApiKey
+        if (stripeKey.isNotBlank()) {
+            com.stripe.android.PaymentConfiguration.init(getApplication(), stripeKey)
+        }
+    }
+
+    // Real Orders AI Dispatch & Ping State
     private var pingCountdownJob: kotlinx.coroutines.Job? = null
-    private var automatedDispatchJob: kotlinx.coroutines.Job? = null
 
     init {
         val db = ShopSafeDatabase.getDatabase(application)
@@ -95,10 +98,6 @@ class ShopSafeViewModel(application: Application) : AndroidViewModel(application
                 }
             }
         }
-
-        // Initialize Automated Order Dispatch Ping Pool & Engine
-        dispatchOffersPool.addAll(DriverOpportunityEngine.generateNearbyDispatchOffers())
-        startAutomatedDispatchEngine()
     }
 
     /**
@@ -218,11 +217,6 @@ class ShopSafeViewModel(application: Application) : AndroidViewModel(application
     val driverDeliveryStep = MutableStateFlow(1) // 1: Pickup, 2: Dropping off, 3: Completed
     val showPayoutDialog = MutableStateFlow(false)
 
-    // Shopper Cart & In-Store Product Scanning State
-    val showShopperCartScreen = MutableStateFlow(false)
-    val shopperOrderItems = MutableStateFlow<List<ShopperOrderItem>>(generateDefaultShopperItems("Supermarket"))
-    val lastCheckoutVerification = MutableStateFlow<StoreCheckoutVerification?>(null)
-
     // In-App Google Maps Navigation & Auto Arrival Geofence State
     val isInAppNavigationActive = MutableStateFlow(false)
     val driverTripProgress = MutableStateFlow(0.05f) // 0.0 to 1.0 along current active route leg
@@ -241,36 +235,6 @@ class ShopSafeViewModel(application: Application) : AndroidViewModel(application
     val selectedPayoutMethod = MutableStateFlow("Instant Cashout (Debit Card)")
     val customPayoutAmountText = MutableStateFlow("")
     val payoutErrorMessage = MutableStateFlow<String?>(null)
-
-    // Stripe Issuing Commercial Purchasing Card State (with Resilient Error Wrapper)
-    val stripePaymentProvider = StripePaymentProvider(application)
-    private val rawStripeService = StripeService(application)
-    val stripeServiceWrapper = StripeServiceErrorWrapper(rawStripeService, application)
-    val stripeService: IStripeService = stripeServiceWrapper
-    val stripeIssuingService = ShopSafeStripeIssuingService()
-    val stripeIssuingTokenizationManager = StripeIssuingTokenizationManager(application)
-    val stripeTokenizationState = stripeIssuingTokenizationManager.tokenizationState
-    val issuingConfig = stripeIssuingService.issuingConfig
-    val issuingCardholders = stripeIssuingService.cardholders
-    val issuingCards = stripeIssuingService.issuingCards
-    val issuingAuthorizations = stripeIssuingService.authorizations
-    val issuingReconciliations = stripeIssuingService.reconciliationRecords
-    val issuingAuditLogs = stripeIssuingService.auditLogs
-    val issuingWebhookEvents = stripeIssuingService.webhookEvents
-    val driverIssuingCard = MutableStateFlow<StripeIssuingCard?>(stripeIssuingService.getDriverCard("driver_1"))
-    val showDriverShopSafeCardModal = MutableStateFlow(false)
-    val showAdminStripeIssuingModal = MutableStateFlow(false)
-    val stripeNonObstructiveAlert = MutableStateFlow<String?>(null)
-
-    init {
-        viewModelScope.launch {
-            stripeServiceWrapper.nonObstructiveAlert.collect { alert ->
-                if (alert != null) {
-                    stripeNonObstructiveAlert.value = alert
-                }
-            }
-        }
-    }
 
     // Driver Dashboard & Completed Deliveries (Cloud Firestore + Room)
     val completedDeliveries = repository.allCompletedDeliveries.stateIn(
@@ -381,10 +345,21 @@ class ShopSafeViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    // Automated Order Dispatch Ping System (45-second timer)
+    // AI Smart Order Dispatch System & Real Orders State
     val incomingDispatchOffer = MutableStateFlow<DriverOffer?>(null)
     val dispatchTimerSeconds = MutableStateFlow(45)
     val isDispatchActive = MutableStateFlow(false)
+    val isAiProcessingOrder = MutableStateFlow(false)
+    val aiOrderDispatchAnalysis = MutableStateFlow<com.example.shopsafe.data.repository.AiOrderDispatchAnalysis?>(null)
+    val selectedRealOrderForAi = MutableStateFlow<Order?>(null)
+    val showAiOrderProcessingSheet = MutableStateFlow(false)
+
+    // Real Orders Pending Courier Dispatch (Filtered from Live Local & Firestore Orders)
+    val realOrdersPendingDispatch: StateFlow<List<Order>> = combine(orders, firestoreOrders) { local, remote ->
+        (remote + local).distinctBy { it.id }.filter {
+            it.status == OrderStatus.PLACED.name || it.status == OrderStatus.SHOPPING_OR_PREPARING.name
+        }.sortedByDescending { it.timestamp }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Real-Time Driver Network Connectivity Monitoring
     private val networkObserver = NetworkConnectivityObserver(application)
@@ -735,33 +710,34 @@ class ShopSafeViewModel(application: Application) : AndroidViewModel(application
             activeTrackedOrderId.value = created.id
             customerTab.value = CustomerTab.ORDERS
 
-            // Auto-queue for Driver Dispatch Ping System
-            val driverPay = (del + tip + 8.50).coerceAtLeast(16.50)
-            val driverOffer = DriverOffer(
-                id = "ping_ord_${created.id}",
-                storeName = store,
-                customerName = currentUser.value?.name ?: "Valued Customer",
-                pickupAddress = "100 Mission St, San Francisco, CA",
-                dropoffAddress = dropoffAddress.value,
-                payAmount = driverPay,
-                basePay = (driverPay - tip).coerceAtLeast(10.0),
-                tipAmount = tip,
-                bonusAmount = 2.50,
-                distanceMiles = 2.2,
-                estimatedMins = 15,
-                itemDetails = items.joinToString(", ") { "${it.quantity}x ${it.name}" },
-                orderId = created.id,
-                deliveryInstructions = checkoutDeliveryInstructions.value,
-                pickupLat = 37.7813,
-                pickupLng = -122.4011,
-                dropoffLat = 37.7895,
-                dropoffLng = -122.4085,
-                offerExpiresInSeconds = 45
-            )
-            dispatchOffersPool.add(0, driverOffer)
-
-            // Automated live order status tracker
-            trackOrderStatusProgression(created.id)
+            // Process real customer order with Gemini AI for courier dispatch
+            processRealOrderWithAi(created) { analysis ->
+                val driverOffer = DriverOffer(
+                    id = "ai_ping_${created.id}",
+                    storeName = store,
+                    customerName = currentUser.value?.name ?: "Valued Customer",
+                    pickupAddress = created.pickupAddress.ifBlank { "100 Mission St, San Francisco, CA" },
+                    dropoffAddress = dropoffAddress.value,
+                    payAmount = analysis.suggestedPayout,
+                    basePay = (analysis.suggestedPayout - tip).coerceAtLeast(10.0),
+                    tipAmount = tip,
+                    bonusAmount = if (analysis.riskLevel == "HIGH VALUE") 3.50 else 2.00,
+                    distanceMiles = 1.8,
+                    estimatedMins = analysis.estimatedTransitMins,
+                    itemDetails = items.joinToString(", ") { "${it.quantity}x ${it.name}" },
+                    orderId = created.id,
+                    deliveryInstructions = "${analysis.handlingInstructions} • ${checkoutDeliveryInstructions.value}",
+                    pickupLat = 37.7813,
+                    pickupLng = -122.4011,
+                    dropoffLat = 37.7895,
+                    dropoffLng = -122.4085,
+                    offerExpiresInSeconds = 60
+                )
+                viewModelScope.launch {
+                    repository.insertDriverOffers(listOf(driverOffer))
+                    triggerDispatchPing(driverOffer)
+                }
+            }
         }
     }
 
@@ -853,14 +829,6 @@ class ShopSafeViewModel(application: Application) : AndroidViewModel(application
             repository.acceptDriverOffer(offer)
             if (!offer.orderId.isNullOrBlank()) {
                 updateOrderStatusAndNotify(offer.orderId, OrderStatus.DRIVER_ASSIGNED.name)
-                // Authorize and bind Stripe Issuing Card for dynamic order spending
-                val estimatedSpend = offer.payAmount * 3.5 // baseline order purchasing limit
-                stripeIssuingService.authorizeOrderSpending(
-                    driverUserId = "driver_1",
-                    orderId = offer.orderId,
-                    estimatedTotal = estimatedSpend
-                )
-                refreshDriverIssuingCard()
             }
             // Automatically launch drive progression
             startAutoDriveSimulation()
@@ -960,15 +928,14 @@ class ShopSafeViewModel(application: Application) : AndroidViewModel(application
         val orderId = offer?.orderId ?: activeTrackedOrderId.value ?: ""
 
         if (step == 1 || arrivalPromptTarget.value == "PICKUP") {
-            // Arrived at pickup store -> Automatically transition shopper from map into cart-style shopping page!
+            // Arrived at pickup store -> Advance to shopping / items collection & safe card
             driverTripProgress.value = 0.05f
-            showShopperCartScreen.value = true
-            if (shopperOrderItems.value.isEmpty()) {
-                shopperOrderItems.value = generateDefaultShopperItems(offer?.storeName ?: "Store Pickup")
-            }
+            advanceDriverStep() // Advances driverDeliveryStep to 2 and starts mileage tracking
             if (orderId.isNotBlank()) {
                 updateOrderStatusAndNotify(orderId, OrderStatus.SHOPPING_OR_PREPARING.name)
             }
+            // Resume navigation progression towards customer
+            startAutoDriveSimulation()
         } else if (step == 2 || arrivalPromptTarget.value == "DROPOFF") {
             // Arrived at customer drop-off -> Advance to proof of delivery
             advanceDriverStep() // Advances driverDeliveryStep to 3
@@ -1286,49 +1253,142 @@ class ShopSafeViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private fun startAutomatedDispatchEngine() {
-        automatedDispatchJob?.cancel()
-        automatedDispatchJob = viewModelScope.launch {
-            // Initial delay after launch
-            delay(5000L)
-            while (true) {
+    // Gemini AI Real Order Dispatch Engine & Processing
+    fun processRealOrderWithAi(
+        order: Order,
+        onComplete: ((com.example.shopsafe.data.repository.AiOrderDispatchAnalysis) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            isAiProcessingOrder.value = true
+            selectedRealOrderForAi.value = order
+            showAiOrderProcessingSheet.value = true
+            try {
                 val profile = driverProfile.value
-                val isOnline = profile?.isOnline ?: true
-                val hasActiveDelivery = activeDriverOffer.value != null
-                val isAlreadyPinged = isDispatchActive.value
+                val analysis = GeminiService.processAndDispatchRealOrder(
+                    orderId = order.id,
+                    storeOrSellerName = order.storeOrSellerName,
+                    itemsSummary = order.itemsSummary,
+                    subtotal = order.subtotal,
+                    deliveryFee = order.deliveryFee,
+                    tip = order.tip,
+                    total = order.total,
+                    pickupAddress = order.pickupAddress.ifBlank { "100 Mission St, San Francisco, CA" },
+                    dropoffAddress = order.dropoffAddress.ifBlank { "123 Main St, San Francisco, CA" },
+                    deliveryInstructions = order.deliveryInstructions,
+                    driverName = profile?.name ?: currentUser.value?.name ?: "Alex Rivera",
+                    driverRating = profile?.rating ?: 4.98,
+                    driverVehicleType = profile?.vehicleType ?: "Sedan",
+                    driverCompletedDeliveries = profile?.totalCompletedDeliveries ?: 54
+                )
+                aiOrderDispatchAnalysis.value = analysis
+                onComplete?.invoke(analysis)
+            } catch (e: Exception) {
+                // Handled gracefully in GeminiService fallback
+            } finally {
+                isAiProcessingOrder.value = false
+            }
+        }
+    }
 
-                if (isOnline && !hasActiveDelivery && !isAlreadyPinged) {
-                    // Driver is online and searching -> automatically offer the closest nearby order ping!
-                    triggerNextAvailableDispatchPing()
-                }
+    fun dispatchRealOrderWithAi(
+        order: Order,
+        analysis: com.example.shopsafe.data.repository.AiOrderDispatchAnalysis? = null
+    ) {
+        viewModelScope.launch {
+            val ana = analysis ?: aiOrderDispatchAnalysis.value ?: GeminiService.processAndDispatchRealOrder(
+                orderId = order.id,
+                storeOrSellerName = order.storeOrSellerName,
+                itemsSummary = order.itemsSummary,
+                subtotal = order.subtotal,
+                deliveryFee = order.deliveryFee,
+                tip = order.tip,
+                total = order.total,
+                pickupAddress = order.pickupAddress,
+                dropoffAddress = order.dropoffAddress,
+                deliveryInstructions = order.deliveryInstructions
+            )
+            val driverPay = ana.suggestedPayout
+            val offer = DriverOffer(
+                id = "ai_dispatch_${order.id}",
+                storeName = order.storeOrSellerName,
+                customerName = currentUser.value?.name ?: "Valued Customer",
+                pickupAddress = order.pickupAddress.ifBlank { "100 Mission St, San Francisco, CA" },
+                dropoffAddress = order.dropoffAddress.ifBlank { "123 Main St, San Francisco, CA" },
+                payAmount = driverPay,
+                basePay = (driverPay - ana.suggestedTip).coerceAtLeast(10.0),
+                tipAmount = ana.suggestedTip,
+                bonusAmount = if (ana.riskLevel == "HIGH VALUE") 3.50 else 1.50,
+                distanceMiles = 1.8,
+                estimatedMins = ana.estimatedTransitMins,
+                itemDetails = order.itemsSummary,
+                orderId = order.id,
+                deliveryInstructions = "${ana.handlingInstructions} • ${order.deliveryInstructions}",
+                offerExpiresInSeconds = 60
+            )
 
-                // Periodic radar search interval
-                delay(12000L)
+            // Save offer into Room & accept into active route
+            repository.insertDriverOffers(listOf(offer))
+            acceptDriverOffer(offer)
+            showAiOrderProcessingSheet.value = false
+            incomingDispatchOffer.value = null
+            isDispatchActive.value = false
+        }
+    }
+
+    fun openAiDispatchForOrder(order: Order) {
+        processRealOrderWithAi(order)
+    }
+
+    fun dismissAiOrderProcessingSheet() {
+        showAiOrderProcessingSheet.value = false
+    }
+
+    fun triggerAiDispatchForRealOrder(order: Order) {
+        processRealOrderWithAi(order) { analysis ->
+            val offer = DriverOffer(
+                id = "ai_ping_${order.id}",
+                storeName = order.storeOrSellerName,
+                customerName = currentUser.value?.name ?: "Customer",
+                pickupAddress = order.pickupAddress.ifBlank { "100 Mission St, San Francisco, CA" },
+                dropoffAddress = order.dropoffAddress.ifBlank { "123 Main St, San Francisco, CA" },
+                payAmount = analysis.suggestedPayout,
+                basePay = (analysis.suggestedPayout - analysis.suggestedTip).coerceAtLeast(10.0),
+                tipAmount = analysis.suggestedTip,
+                bonusAmount = 2.50,
+                distanceMiles = 1.8,
+                estimatedMins = analysis.estimatedTransitMins,
+                itemDetails = order.itemsSummary,
+                orderId = order.id,
+                deliveryInstructions = "${analysis.handlingInstructions} • ${order.deliveryInstructions}",
+                offerExpiresInSeconds = 60
+            )
+            viewModelScope.launch {
+                repository.insertDriverOffers(listOf(offer))
+                triggerDispatchPing(offer)
             }
         }
     }
 
     fun triggerNextAvailableDispatchPing() {
-        if (dispatchOffersPool.isEmpty()) {
-            dispatchOffersPool.addAll(com.example.shopsafe.data.models.DriverOpportunityEngine.generateNearbyDispatchOffers())
+        val pendingRealOrders = realOrdersPendingDispatch.value
+        if (pendingRealOrders.isNotEmpty()) {
+            val nextRealOrder = pendingRealOrders.first()
+            triggerAiDispatchForRealOrder(nextRealOrder)
+        } else {
+            val availableOffersList = availableDriverOffers.value
+            if (availableOffersList.isNotEmpty()) {
+                triggerDispatchPing(availableOffersList.first())
+            }
         }
-        val offer = dispatchOffersPool[currentDispatchOfferIndex % dispatchOffersPool.size]
-        currentDispatchOfferIndex++
-        triggerDispatchPing(offer)
     }
 
     fun triggerInstantDispatchPing() {
         triggerNextAvailableDispatchPing()
     }
 
-    fun triggerDispatchPing(offer: DriverOffer? = null) {
-        val targetOffer = offer ?: if (dispatchOffersPool.isNotEmpty()) {
-            dispatchOffersPool[currentDispatchOfferIndex % dispatchOffersPool.size]
-        } else {
-            com.example.shopsafe.data.models.DriverOpportunityEngine.generateNearbyDispatchOffers().first()
-        }
-        incomingDispatchOffer.value = targetOffer
-        val initialSeconds = targetOffer.offerExpiresInSeconds.coerceAtLeast(30)
+    fun triggerDispatchPing(offer: DriverOffer) {
+        incomingDispatchOffer.value = offer
+        val initialSeconds = offer.offerExpiresInSeconds.coerceAtLeast(30)
         dispatchTimerSeconds.value = initialSeconds
         isDispatchActive.value = true
 
@@ -1343,7 +1403,6 @@ class ShopSafeViewModel(application: Application) : AndroidViewModel(application
                 }
             }
             if (isDispatchActive.value && dispatchTimerSeconds.value <= 0) {
-                // 45s Timer expired - pass to next closest driver available
                 denyDispatchOffer()
             }
         }
@@ -1787,436 +1846,4 @@ class ShopSafeViewModel(application: Application) : AndroidViewModel(application
             paymentMethod.value = "ShopSafe Pay Balance ($0.00)"
         }
     }
-
-    // Shopper Cart & Item Picking Actions
-    fun openShopperCartScreen() {
-        showShopperCartScreen.value = true
-    }
-
-    fun closeShopperCartScreen() {
-        showShopperCartScreen.value = false
-    }
-
-    fun incrementShopperItemQuantity(itemId: String) {
-        val current = shopperOrderItems.value.map { item ->
-            if (item.id == itemId) {
-                val newQty = item.collectedQuantity + 1
-                val newStatus = if (newQty >= item.requestedQuantity) ShopperItemStatus.COLLECTED else item.status
-                item.copy(collectedQuantity = newQty, status = newStatus)
-            } else item
-        }
-        shopperOrderItems.value = current
-    }
-
-    fun decrementShopperItemQuantity(itemId: String) {
-        val current = shopperOrderItems.value.map { item ->
-            if (item.id == itemId) {
-                val newQty = (item.collectedQuantity - 1).coerceAtLeast(0)
-                val newStatus = if (newQty == 0) ShopperItemStatus.PENDING else item.status
-                item.copy(collectedQuantity = newQty, status = newStatus)
-            } else item
-        }
-        shopperOrderItems.value = current
-    }
-
-    fun quickCollectShopperItem(itemId: String) {
-        val current = shopperOrderItems.value.map { item ->
-            if (item.id == itemId) {
-                item.copy(
-                    collectedQuantity = item.requestedQuantity,
-                    status = ShopperItemStatus.COLLECTED,
-                    scanMethod = ItemScanMethod.MANUAL_COUNTER
-                )
-            } else item
-        }
-        shopperOrderItems.value = current
-        scanFeedbackMessage.value = "Item marked collected!"
-        viewModelScope.launch {
-            delay(2000)
-            scanFeedbackMessage.value = null
-        }
-    }
-
-    fun substituteShopperItem(itemId: String, substitutionName: String, substitutionPrice: Double) {
-        val current = shopperOrderItems.value.map { item ->
-            if (item.id == itemId) {
-                item.copy(
-                    status = ShopperItemStatus.SUBSTITUTED,
-                    substitutionName = substitutionName,
-                    substitutionPrice = substitutionPrice,
-                    actualPrice = substitutionPrice,
-                    collectedQuantity = item.requestedQuantity
-                )
-            } else item
-        }
-        shopperOrderItems.value = current
-        scanFeedbackMessage.value = "Substituted: $substitutionName"
-        viewModelScope.launch {
-            delay(2000)
-            scanFeedbackMessage.value = null
-        }
-    }
-
-    fun markShopperItemUnavailable(itemId: String, reason: String) {
-        val current = shopperOrderItems.value.map { item ->
-            if (item.id == itemId) {
-                item.copy(
-                    status = ShopperItemStatus.UNAVAILABLE,
-                    unavailableReason = reason,
-                    collectedQuantity = 0
-                )
-            } else item
-        }
-        shopperOrderItems.value = current
-        scanFeedbackMessage.value = "Item marked unavailable (customer refunded)"
-        viewModelScope.launch {
-            delay(2000)
-            scanFeedbackMessage.value = null
-        }
-    }
-
-    fun scanBarcodeForItem(itemId: String, barcode: String) {
-        val current = shopperOrderItems.value.map { item ->
-            if (item.id == itemId) {
-                item.copy(
-                    status = ShopperItemStatus.COLLECTED,
-                    collectedQuantity = item.requestedQuantity,
-                    scanMethod = ItemScanMethod.BARCODE,
-                    barcodeConfidence = 0.99f
-                )
-            } else item
-        }
-        shopperOrderItems.value = current
-        scanFeedbackMessage.value = "Barcode verified: $barcode"
-        viewModelScope.launch {
-            delay(2000)
-            scanFeedbackMessage.value = null
-        }
-    }
-
-    fun scanQrCodeForItem(itemId: String, qrCode: String) {
-        val current = shopperOrderItems.value.map { item ->
-            if (item.id == itemId) {
-                item.copy(
-                    status = ShopperItemStatus.COLLECTED,
-                    collectedQuantity = item.requestedQuantity,
-                    scanMethod = ItemScanMethod.QR_CODE,
-                    barcodeConfidence = 1.0f
-                )
-            } else item
-        }
-        shopperOrderItems.value = current
-        scanFeedbackMessage.value = "QR code verified: $qrCode"
-        viewModelScope.launch {
-            delay(2000)
-            scanFeedbackMessage.value = null
-        }
-    }
-
-    fun aiRecognizePhotoItem(itemId: String, productName: String) {
-        val current = shopperOrderItems.value.map { item ->
-            if (item.id == itemId) {
-                item.copy(
-                    status = ShopperItemStatus.COLLECTED,
-                    collectedQuantity = item.requestedQuantity,
-                    scanMethod = ItemScanMethod.AI_PHOTO_RECOGNITION,
-                    barcodeConfidence = 0.96f
-                )
-            } else item
-        }
-        shopperOrderItems.value = current
-        scanFeedbackMessage.value = "Gemini AI recognized: $productName"
-        viewModelScope.launch {
-            delay(2000)
-            scanFeedbackMessage.value = null
-        }
-    }
-
-    fun manualPhotoCaptureForItem(itemId: String, price: Double, quantity: Int) {
-        val current = shopperOrderItems.value.map { item ->
-            if (item.id == itemId) {
-                item.copy(
-                    status = ShopperItemStatus.COLLECTED,
-                    collectedQuantity = quantity,
-                    actualPrice = price,
-                    scanMethod = ItemScanMethod.MANUAL_PHOTO,
-                    itemPhotoUri = "captured_item_${itemId}.jpg"
-                )
-            } else item
-        }
-        shopperOrderItems.value = current
-        scanFeedbackMessage.value = "Manual photo recorded ($$price x $quantity)"
-        viewModelScope.launch {
-            delay(2000)
-            scanFeedbackMessage.value = null
-        }
-    }
-
-    fun confirmCheckoutTotalAndReceipt(
-        actualTotal: Double,
-        priceAdjustment: Double = 0.0,
-        adjustmentReason: String = "",
-        registerPhotoUrl: String = "",
-        receiptPhotoUrl: String = ""
-    ) {
-        val offer = activeDriverOffer.value
-        val orderId = offer?.orderId ?: "SS-ORD-9021"
-        val storeName = offer?.storeName ?: "Store Checkout"
-        val expected = shopperOrderItems.value.sumOf { it.expectedPrice * it.requestedQuantity }
-        val diff = Math.abs(actualTotal - expected)
-        val isDiscrepancy = diff > (expected * 0.25)
-
-        val verification = StoreCheckoutVerification(
-            orderId = orderId,
-            storeName = storeName,
-            expectedSubtotal = expected,
-            actualRegisterTotal = actualTotal,
-            priceAdjustmentAmount = priceAdjustment,
-            adjustmentReason = adjustmentReason,
-            registerPhotoUrl = registerPhotoUrl,
-            receiptPhotoUrl = receiptPhotoUrl,
-            isReceiptReadable = true,
-            receiptOcrStoreMatch = true,
-            isDiscrepancyFlagged = isDiscrepancy,
-            discrepancyNote = if (isDiscrepancy) "Discrepancy of $diff flagged for audit" else null,
-            verificationTimestamp = System.currentTimeMillis()
-        )
-        lastCheckoutVerification.value = verification
-        showShopperCartScreen.value = false
-
-        // Stripe Issuing Real-Time Authorization & 3-Way Reconcile
-        viewModelScope.launch {
-            val card = driverIssuingCard.value
-            val cardId = card?.id ?: "ic_default"
-            stripeIssuingService.processRealtimeAuthorization(
-                cardId = cardId,
-                orderId = orderId,
-                merchantName = storeName,
-                merchantCategory = "grocery_stores",
-                requestedAmount = actualTotal
-            )
-
-            stripeIssuingService.reconcileOrderPurchase(
-                orderId = orderId,
-                driverId = "driver_1",
-                driverName = driverProfile.value?.name ?: "David Chen",
-                merchantName = storeName,
-                expectedOrderTotal = expected,
-                stripeCapturedAmount = actualTotal,
-                receiptScannedAmount = actualTotal,
-                registerPhotoUrl = registerPhotoUrl,
-                originalReceiptPhotoUrl = receiptPhotoUrl
-            )
-
-            // Non-obstructive alert for map navigation
-            stripeNonObstructiveAlert.value = "Stripe Purchase Approved: ${String.format("%.2f", actualTotal)} • Reconciled ✓"
-            delay(4000)
-            stripeNonObstructiveAlert.value = null
-        }
-
-        // Automatically advance driver navigation directly back to active Google Maps towards customer!
-        driverDeliveryStep.value = 2
-        driverTripProgress.value = 0.05f
-        isInAppNavigationActive.value = true
-        isMileageTrackingActive.value = true
-        startAutoDriveSimulation()
-        startAutomatedMileageTracking(offer?.distanceMiles ?: 3.5)
-        updateOrderStatusAndNotify(orderId, OrderStatus.ON_THE_WAY.name)
-    }
-
-    // ----------------------------------------------------
-    // Stripe Issuing Management Operations
-    // ----------------------------------------------------
-    fun refreshDriverIssuingCard(): Boolean {
-        val card = stripeIssuingService.getDriverCard("driver_1")
-        driverIssuingCard.value = card
-        return card != null
-    }
-
-    suspend fun setStripeEnvironmentMode(mode: StripeEnvironmentMode) {
-        val adminName = currentUser.value?.name ?: "ShopSafe Admin"
-        stripeIssuingService.setEnvironmentMode(mode, adminName)
-    }
-
-    suspend fun rotateStripeServerKey(): Boolean {
-        val adminName = currentUser.value?.name ?: "ShopSafe Admin"
-        return stripeIssuingService.rotateApiKey(adminName)
-    }
-
-    suspend fun toggleDriverCardFreeze(freeze: Boolean) {
-        val card = driverIssuingCard.value ?: return
-        val updated = stripeIssuingService.toggleCardFreeze(card.id, freeze, triggeredBy = card.driverName)
-        driverIssuingCard.value = updated
-    }
-
-    suspend fun reportDriverCardLostStolen() {
-        val card = driverIssuingCard.value ?: return
-        val updated = stripeIssuingService.reportCardLostStolen(card.id, adminOrDriverName = card.driverName)
-        driverIssuingCard.value = updated
-    }
-
-    suspend fun requestReplacementIssuingCard() {
-        val card = driverIssuingCard.value ?: return
-        val newCard = stripeIssuingService.issueReplacementCard(card.id, adminName = card.driverName)
-        driverIssuingCard.value = newCard
-    }
-
-    suspend fun toggleCardFreezeAdmin(cardId: String, freeze: Boolean) {
-        val adminName = currentUser.value?.name ?: "ShopSafe Admin"
-        stripeIssuingService.toggleCardFreeze(cardId, freeze, triggeredBy = adminName)
-        refreshDriverIssuingCard()
-    }
-
-    suspend fun overrideCardSpendingLimit(cardId: String, newLimit: Double) {
-        val adminName = currentUser.value?.name ?: "ShopSafe Admin"
-        stripeIssuingService.updateCardSpendingLimits(cardId, newLimit, adminName)
-        refreshDriverIssuingCard()
-    }
-
-    suspend fun replaceCardAdmin(cardId: String) {
-        val adminName = currentUser.value?.name ?: "ShopSafe Admin"
-        stripeIssuingService.issueReplacementCard(cardId, adminName)
-        refreshDriverIssuingCard()
-    }
-
-    suspend fun simulateWebhookPing(): StripeWebhookEventRecord {
-        return stripeIssuingService.simulateWebhookTest()
-    }
-
-    // ----------------------------------------------------
-    // Stripe Issuing Backend Tokenization Operations (via StripeService)
-    // ----------------------------------------------------
-    suspend fun requestCardEphemeralKey(cardId: String, cardholderId: String): Result<StripeIssuingEphemeralKey> {
-        return stripeService.getIssuingEphemeralKey(cardId, cardholderId)
-    }
-
-    suspend fun revealCardDetailsSecurely(): Result<StripeCardTokenizedDetails> {
-        val card = driverIssuingCard.value ?: return Result.failure(IllegalStateException("No driver issuing card found"))
-        val result = stripeService.fetchSecureTokenizedCardDetails(card)
-        if (result.isSuccess) {
-            stripeIssuingTokenizationManager.fetchTokenizedCardDetails(card)
-        }
-        return result
-    }
-
-    suspend fun tokenizeCardForGooglePay(): Result<StripePushProvisioningPayload> {
-        val card = driverIssuingCard.value ?: return Result.failure(IllegalStateException("No driver issuing card found"))
-        val result = stripeService.pushProvisionToGooglePay(card)
-        if (result.isSuccess) {
-            stripeIssuingTokenizationManager.tokenizeForGooglePay(card)
-        }
-        return result
-    }
-
-    /**
-     * Initializes the payment UI by calling StripeService.getEphemeralKey() and attaching the resulting key to the Stripe instance in StripePaymentProvider.
-     */
-    suspend fun initializePaymentUI(customerId: String = "cus_default_driver"): Result<com.stripe.android.Stripe> {
-        return try {
-            val keyResult = stripeService.getEphemeralKey(customerId = customerId)
-            if (keyResult.isSuccess) {
-                val ephemeralKey = keyResult.getOrThrow()
-                stripePaymentProvider.attachEphemeralKey(
-                    ephemeralKeySecret = ephemeralKey.secret,
-                    cardId = ephemeralKey.cardId
-                )
-                Result.success(stripePaymentProvider.stripe)
-            } else {
-                val error = keyResult.exceptionOrNull() ?: IllegalStateException("Failed to retrieve ephemeral key")
-                stripePaymentProvider.recordError(error.message ?: "Unknown error")
-                Result.failure(error)
-            }
-        } catch (e: Exception) {
-            stripePaymentProvider.recordError(e.message ?: "Initialization exception")
-            Result.failure(e)
-        }
-    }
-
-    fun clearSensitiveTokenizedData() {
-        stripeService.wipeInMemoryCardDetails()
-        stripeIssuingTokenizationManager.clearSensitiveTokenizedData()
-    }
-
-    fun dismissStripeAlert() {
-        stripeServiceWrapper.dismissAlert()
-    }
-
-    fun clearTokenizationMessages() {
-        stripeIssuingTokenizationManager.clearMessages()
-    }
-}
-
-fun generateDefaultShopperItems(storeName: String): List<ShopperOrderItem> {
-    return listOf(
-        ShopperOrderItem(
-            id = "shp_1",
-            name = "Organic Whole Milk (1 Gallon)",
-            brandOrCategory = "Dairy Essentials",
-            requestedQuantity = 2,
-            collectedQuantity = 0,
-            expectedPrice = 5.99,
-            actualPrice = 5.99,
-            unit = "gal",
-            aisle = "Aisle 1 - Dairy Coolers",
-            barcode = "011110416001",
-            qrCode = "SS-QR-MILK-901",
-            status = ShopperItemStatus.PENDING
-        ),
-        ShopperOrderItem(
-            id = "shp_2",
-            name = "Organic Avocados (Hass 4-Pack)",
-            brandOrCategory = "Fresh Produce",
-            requestedQuantity = 1,
-            collectedQuantity = 0,
-            expectedPrice = 4.49,
-            actualPrice = 4.49,
-            unit = "pk",
-            aisle = "Produce Section - Island B",
-            barcode = "033383120045",
-            qrCode = "SS-QR-AVO-402",
-            status = ShopperItemStatus.PENDING
-        ),
-        ShopperOrderItem(
-            id = "shp_3",
-            name = "Artisan Sourdough Loaf (Fresh Baked)",
-            brandOrCategory = "Bakery",
-            requestedQuantity = 1,
-            collectedQuantity = 0,
-            expectedPrice = 4.99,
-            actualPrice = 4.99,
-            unit = "loaf",
-            aisle = "Bakery Counter",
-            barcode = "041220891234",
-            qrCode = "SS-QR-BREAD-103",
-            status = ShopperItemStatus.PENDING
-        ),
-        ShopperOrderItem(
-            id = "shp_4",
-            name = "Organic Free-Range Large Brown Eggs (12ct)",
-            brandOrCategory = "Dairy & Eggs",
-            requestedQuantity = 1,
-            collectedQuantity = 0,
-            expectedPrice = 6.29,
-            actualPrice = 6.29,
-            unit = "dozen",
-            aisle = "Aisle 1 - Egg Case",
-            barcode = "072230198765",
-            qrCode = "SS-QR-EGGS-804",
-            status = ShopperItemStatus.PENDING
-        ),
-        ShopperOrderItem(
-            id = "shp_5",
-            name = "Sparkling Spring Water Lime (12-Pack Cans)",
-            brandOrCategory = "Beverages",
-            requestedQuantity = 2,
-            collectedQuantity = 0,
-            expectedPrice = 7.49,
-            actualPrice = 7.49,
-            unit = "pack",
-            aisle = "Aisle 4 - Soft Drinks",
-            barcode = "085000123456",
-            qrCode = "SS-QR-WATER-505",
-            status = ShopperItemStatus.PENDING
-        )
-    )
 }

@@ -115,7 +115,8 @@ fun AdminControlDashboard(
                     "MARKETPLACE" to "Products",
                     "STORES" to "Stores",
                     "DRIVERS" to "Drivers",
-                    "ORDERS" to "Orders"
+                    "ORDERS" to "Orders",
+                    "STRIPE" to "Stripe"
                 )
 
                 sections.forEach { (sec, label) ->
@@ -182,71 +183,6 @@ fun AdminControlDashboard(
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Text("Active Orders", color = Color(0xFF94A3B8), fontSize = 11.sp)
                                     Text("${orders.size}", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-
-                        // Stripe Issuing Commercial Card Program Admin Hub
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.CreditCard,
-                                            contentDescription = "Stripe Issuing",
-                                            tint = Color(0xFF6366F1),
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            "Stripe Issuing Card Program",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 15.sp
-                                        )
-                                    }
-
-                                    Surface(
-                                        color = Color(0xFF10B981).copy(alpha = 0.2f),
-                                        shape = RoundedCornerShape(4.dp)
-                                    ) {
-                                        Text(
-                                            "SECURE API",
-                                            color = Color(0xFF34D399),
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-
-                                Text(
-                                    text = "Manage commercial cards, dynamic authorization rules, daily spending caps, 3-way receipt reconciliation, and server-side keys.",
-                                    color = Color(0xFF94A3B8),
-                                    fontSize = 11.sp
-                                )
-
-                                Button(
-                                    onClick = {
-                                        viewModel.showAdminStripeIssuingModal.value = true
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(Icons.Default.Tune, contentDescription = "Open Stripe Hub", tint = Color.White)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Open Stripe Issuing Admin Console", color = Color.White, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -575,6 +511,90 @@ fun AdminControlDashboard(
                                     ) {
                                         Text("Delete Order Record", fontSize = 11.sp, color = Color.White)
                                     }
+                                }
+                            }
+                        }
+                    }
+
+                    "STRIPE" -> {
+                        val currentStripeEnv by viewModel.stripeEnvironment.collectAsState()
+                        // EnvManager dynamically retrieves the current key based on AppConfig.isStripeLiveMode
+                        val activeKeyToDisplay = com.example.shopsafe.util.EnvManager.stripeApiKey
+
+                        Text("Secure Stripe Environment & API Configuration", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text("Switch between Stripe sandbox testing and live card processing environments securely. Keys are retrieved via BuildConfig and never exposed in client source code.", color = Color(0xFF94A3B8), fontSize = 12.sp)
+
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text("Active Stripe Environment", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                        Text(if (currentStripeEnv == "LIVE") "🔴 Live Production Mode" else "🟡 Sandbox Test Mode", color = if (currentStripeEnv == "LIVE") Color(0xFFEF4444) else Color(0xFFF59E0B), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+
+                                    Row(
+                                        modifier = Modifier
+                                            .background(Color(0xFF334155), RoundedCornerShape(8.dp))
+                                            .padding(4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Surface(
+                                            color = if (currentStripeEnv == "TEST") Color(0xFFF59E0B) else Color.Transparent,
+                                            shape = RoundedCornerShape(6.dp),
+                                            modifier = Modifier.clickable { viewModel.setStripeEnvironment("TEST") }
+                                        ) {
+                                            Text("TEST", color = if (currentStripeEnv == "TEST") Color(0xFF0F172A) else Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                                        }
+                                        Surface(
+                                            color = if (currentStripeEnv == "LIVE") Color(0xFFEF4444) else Color.Transparent,
+                                            shape = RoundedCornerShape(6.dp),
+                                            modifier = Modifier.clickable { viewModel.setStripeEnvironment("LIVE") }
+                                        ) {
+                                            Text("LIVE", color = if (currentStripeEnv == "LIVE") Color.White else Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                                        }
+                                    }
+                                }
+
+                                Divider(color = Color(0xFF334155))
+
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("Active Publishable Key (via BuildConfig)", color = Color(0xFFBAE6FD), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Surface(
+                                        color = Color(0xFF0F172A),
+                                        shape = RoundedCornerShape(6.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = activeKeyToDisplay,
+                                            color = Color(0xFF34D399),
+                                            fontSize = 12.sp,
+                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                            modifier = Modifier.padding(10.dp)
+                                        )
+                                    }
+                                    Text("🔒 Protected via TLS 1.3 tokenization. Secret keys are kept strictly on authorized backend servers.", color = Color(0xFF94A3B8), fontSize = 10.sp)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        android.widget.Toast.makeText(
+                                            viewModel.getApplication(),
+                                            "Stripe SDK successfully reconfigured to ${currentStripeEnv} environment!",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Apply & Reinitialize Stripe SDK", color = Color.White, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }

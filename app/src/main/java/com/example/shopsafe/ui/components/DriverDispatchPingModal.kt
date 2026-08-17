@@ -177,7 +177,7 @@ fun DriverDispatchPingModal(
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "⚡ AUTOMATIC DISPATCH",
+                                    text = "✨ AI REAL ORDER DISPATCH",
                                     color = Color(0xFF38BDF8),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.ExtraBold,
@@ -185,9 +185,10 @@ fun DriverDispatchPingModal(
                                 )
                             }
                             Text(
-                                text = "Matched as Closest Driver",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 11.sp
+                                text = "Gemini AI Live Order Match",
+                                color = Color(0xFF34D399),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                     }

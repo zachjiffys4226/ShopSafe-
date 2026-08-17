@@ -36,7 +36,11 @@ fun DriverDemandHeatmapModal(
     onClose: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val hotspots = remember { DemandHeatmapEngine.generateHotspots() }
+    val orders by viewModel.orders.collectAsState()
+    val firestoreOrders by viewModel.firestoreOrders.collectAsState()
+    val hotspots = remember(orders, firestoreOrders) { 
+        DemandHeatmapEngine.generateHotspotsFromOrders(firestoreOrders + orders) 
+    }
     var selectedHotspot by remember { mutableStateOf<DemandHotspot?>(hotspots.firstOrNull()) }
 
     val defaultCenter = LatLng(37.7749, -122.4194) // San Francisco Center

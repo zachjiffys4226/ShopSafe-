@@ -56,18 +56,20 @@ fun DriverPortalScreen(
     val isNetworkConnected by viewModel.isNetworkConnected.collectAsState()
     val isLowPowerModeEnabled by viewModel.isLowPowerModeEnabled.collectAsState()
 
-    // Dispatch Ping State
+    // Dispatch Ping State & AI Real Order State
     val isDispatchActive by viewModel.isDispatchActive.collectAsState()
     val dispatchOffer by viewModel.incomingDispatchOffer.collectAsState()
     val timerSeconds by viewModel.dispatchTimerSeconds.collectAsState()
     val isInAppNavigationActive by viewModel.isInAppNavigationActive.collectAsState()
     val driverTripProgress by viewModel.driverTripProgress.collectAsState()
+    val realOrdersPendingDispatch by viewModel.realOrdersPendingDispatch.collectAsState()
+    val isAiProcessingOrder by viewModel.isAiProcessingOrder.collectAsState()
+    val aiOrderDispatchAnalysis by viewModel.aiOrderDispatchAnalysis.collectAsState()
+    val selectedRealOrderForAi by viewModel.selectedRealOrderForAi.collectAsState()
+    val showAiOrderProcessingSheet by viewModel.showAiOrderProcessingSheet.collectAsState()
 
     // Modals
     val showRequestPayoutScreen by viewModel.showRequestPayoutScreen.collectAsState()
-    val showDriverShopSafeCardModal by viewModel.showDriverShopSafeCardModal.collectAsState()
-    val showAdminStripeIssuingModal by viewModel.showAdminStripeIssuingModal.collectAsState()
-    val stripeNonObstructiveAlert by viewModel.stripeNonObstructiveAlert.collectAsState()
     val showDemandHeatmap by viewModel.showDriverDemandHeatmapModal.collectAsState()
     val showAddStoreModal by viewModel.showAddStoreModal.collectAsState()
     val showMerchantPassModal by viewModel.showMerchantIntegrationPassModal.collectAsState()
@@ -77,10 +79,14 @@ fun DriverPortalScreen(
     val lastRecordedTripMiles by viewModel.lastRecordedTripMiles.collectAsState()
     val lastRecordedTaxDeduction by viewModel.lastRecordedTaxDeduction.collectAsState()
 
-    // Map & Hotspot Engine State
+    // Map & Hotspot Engine State (Reflecting Real Online Delivery Orders)
+    val orders by viewModel.orders.collectAsState()
+    val firestoreOrders by viewModel.firestoreOrders.collectAsState()
     var selectedNavTab by remember { mutableStateOf(DriverNavigationTab.MAP) }
     var selectedFilter by remember { mutableStateOf(DriverMapFilter.ALL) }
-    val opportunityHotspots = remember { DriverOpportunityEngine.generateOpportunityHotspots() }
+    val opportunityHotspots = remember(orders, firestoreOrders) { 
+        DriverOpportunityEngine.generateOpportunityHotspotsFromOrders(firestoreOrders + orders) 
+    }
     var selectedHotspot by remember { mutableStateOf<DriverOpportunityHotspot?>(null) }
     var detailsHotspot by remember { mutableStateOf<DriverOpportunityHotspot?>(null) }
     var showExpandableMenu by remember { mutableStateOf(false) }
@@ -88,10 +94,6 @@ fun DriverPortalScreen(
     var showPreShiftChecklist by remember { mutableStateOf(false) }
     var showDeliveryCelebrationModal by remember { mutableStateOf(false) }
     var celebrationEarnedAmount by remember { mutableDoubleStateOf(24.50) }
-    var showDriverReceiptExpenseScreen by remember { mutableStateOf(false) }
-    var showDriverTaxCenterScreen by remember { mutableStateOf(false) }
-    var showDeliveryMediaVaultScreen by remember { mutableStateOf(false) }
-    var showBusinessAccountingScreen by remember { mutableStateOf(false) }
 
     // Live Online Shift Timer
     val isOnline = profile?.isOnline ?: true
@@ -151,157 +153,109 @@ fun DriverPortalScreen(
             }
         )
 
-        // LAYER 1: Top Floating Header Bar (Online Status, Timer, Earnings, SOS)
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .align(Alignment.TopCenter)
-        ) {
-            // Floating Status Pill
-            Surface(
-                color = Color(0xFF0F172A).copy(alpha = 0.94f),
-                shape = RoundedCornerShape(20.dp),
-                shadowElevation = 8.dp,
-                modifier = Modifier.fillMaxWidth()
+        // LAYER 1: Top Floating Header Bar (Online Status, Timer, Earnings, SOS) - Hidden during active delivery
+        if (activeOffer == null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .align(Alignment.TopCenter)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Floating Status Pill
+                Surface(
+                    color = Color(0xFF0F172A).copy(alpha = 0.94f),
+                    shape = RoundedCornerShape(20.dp),
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Online/Offline Toggle Pill
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isOnline) Color(0xFF065F46) else Color(0xFF334155))
-                            .clickable {
-                                if (!isOnline) {
-                                    showPreShiftChecklist = true
-                                } else {
-                                    viewModel.toggleDriverOnline(false)
-                                }
-                            }
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
-                            color = if (isOnline) Color(0xFF34D399) else Color(0xFF94A3B8),
-                            shape = CircleShape,
-                            modifier = Modifier.size(8.dp)
-                        ) {}
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isOnline) "ONLINE" else "OFFLINE",
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
-
-                    // Online Timer & Today's Earnings
-                    if (isOnline) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Timer, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(13.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(formattedShiftTime, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("•", color = Color(0xFF64748B), fontSize = 12.sp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("$142.50", color = Color(0xFF34D399), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    // Action Icons: ShopSafe Card + Low Power + SOS Safety Shield
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = { viewModel.showDriverShopSafeCardModal.value = true },
-                            modifier = Modifier
-                                .size(32.dp)
-                                .background(Color(0xFF6366F1).copy(alpha = 0.25f), CircleShape)
-                        ) {
-                            Icon(
-                                Icons.Default.CreditCard,
-                                contentDescription = "ShopSafe Driver Card",
-                                tint = Color(0xFF818CF8),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(4.dp))
-
-                        IconButton(
-                            onClick = { viewModel.toggleLowPowerMode() },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.BatterySaver,
-                                contentDescription = "Low Power Mode",
-                                tint = if (isLowPowerModeEnabled) Color(0xFFF59E0B) else Color(0xFF94A3B8),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(4.dp))
-
-                        // SOS Red Shield Button
-                        IconButton(
-                            onClick = { showSafetySOSModal = true },
-                            modifier = Modifier
-                                .size(34.dp)
-                                .background(Color(0xFFDC2626), CircleShape)
-                                .testTag("driver_sos_button")
-                        ) {
-                            Icon(
-                                Icons.Default.Shield,
-                                contentDescription = "Emergency SOS & Safety",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Non-Obstructive Real-Time Stripe Alert Banner (Preserves Google Maps Navigation)
-            AnimatedVisibility(
-                visible = stripeNonObstructiveAlert != null,
-                enter = fadeIn() + slideInVertically(),
-                exit = fadeOut() + slideOutVertically()
-            ) {
-                stripeNonObstructiveAlert?.let { alertText ->
-                    Surface(
-                        color = Color(0xFF10B981),
-                        shape = RoundedCornerShape(12.dp),
-                        shadowElevation = 6.dp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp)
-                    ) {
+                        // Online/Offline Toggle Pill
                         Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isOnline) Color(0xFF065F46) else Color(0xFF334155))
+                                .clickable {
+                                    if (!isOnline) {
+                                        showPreShiftChecklist = true
+                                    } else {
+                                        viewModel.toggleDriverOnline(false)
+                                    }
+                                }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                color = if (isOnline) Color(0xFF34D399) else Color(0xFF94A3B8),
+                                shape = CircleShape,
+                                modifier = Modifier.size(8.dp)
+                            ) {}
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = alertText,
+                                text = if (isOnline) "ONLINE" else "OFFLINE",
                                 color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold
                             )
+                        }
+
+                        // Online Timer & Today's Earnings
+                        if (isOnline) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Timer, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(13.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(formattedShiftTime, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("•", color = Color(0xFF64748B), fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("$142.50", color = Color(0xFF34D399), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        // Action Icons: Low Power + SOS Safety Shield
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = { viewModel.toggleLowPowerMode() },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.BatterySaver,
+                                    contentDescription = "Low Power Mode",
+                                    tint = if (isLowPowerModeEnabled) Color(0xFFF59E0B) else Color(0xFF94A3B8),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(4.dp))
+
+                            // SOS Red Shield Button
+                            IconButton(
+                                onClick = { showSafetySOSModal = true },
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .background(Color(0xFFDC2626), CircleShape)
+                                    .testTag("driver_sos_button")
+                            ) {
+                                Icon(
+                                    Icons.Default.Shield,
+                                    contentDescription = "Emergency SOS & Safety",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-            // Floating Map Filter Chips Bar (Horizontal Scroll)
-            if (activeOffer == null) {
+                // Floating Map Filter Chips Bar (Horizontal Scroll)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -335,8 +289,8 @@ fun DriverPortalScreen(
             }
         }
 
-        // LAYER 2: Floating Quick Menu Button (ShopSafe Shield)
-        if (selectedNavTab == DriverNavigationTab.MAP) {
+        // LAYER 2: Floating Quick Menu Button (ShopSafe Shield) - Hidden during active delivery
+        if (activeOffer == null && selectedNavTab == DriverNavigationTab.MAP) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -417,30 +371,34 @@ fun DriverPortalScreen(
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text(
-                                        text = if (isOnline) "📡 Auto-Dispatch Radar Active" else "⏸️ Driver is Offline",
+                                        text = if (isOnline) "✨ AI Real Order Dispatch Active" else "⏸️ Driver is Offline",
                                         color = if (isOnline) Color(0xFF38BDF8) else Color(0xFF94A3B8),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = if (isOnline) "Matching closest high-pay orders..." else "Go Online to receive order pings",
-                                        color = Color(0xFFCBD5E1),
-                                        fontSize = 11.sp
+                                        text = if (isOnline) {
+                                            if (realOrdersPendingDispatch.isNotEmpty()) "🔥 ${realOrdersPendingDispatch.size} Real Order(s) pending AI dispatch"
+                                            else "Gemini AI processing live customer orders..."
+                                        } else "Go Online to receive order pings",
+                                        color = if (realOrdersPendingDispatch.isNotEmpty()) Color(0xFF34D399) else Color(0xFFCBD5E1),
+                                        fontSize = 11.sp,
+                                        fontWeight = if (realOrdersPendingDispatch.isNotEmpty()) FontWeight.SemiBold else FontWeight.Normal
                                     )
                                 }
                             }
 
                             if (isOnline) {
                                 Button(
-                                    onClick = { viewModel.triggerInstantDispatchPing() },
+                                    onClick = { viewModel.triggerNextAvailableDispatchPing() },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
                                     shape = RoundedCornerShape(12.dp),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                     modifier = Modifier.testTag("driver_test_ping_button")
                                 ) {
-                                    Icon(Icons.Default.Bolt, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Test Ping", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text(if (realOrdersPendingDispatch.isNotEmpty()) "Dispatch AI" else "AI Ping", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                             } else {
                                 Button(
@@ -604,12 +562,6 @@ fun DriverPortalScreen(
                 onSelectShortcut = { shortcutId ->
                     when (shortcutId) {
                         "MAP" -> selectedNavTab = DriverNavigationTab.MAP
-                        "SHOPSAFE_CARD" -> viewModel.showDriverShopSafeCardModal.value = true
-                        "STRIPE_ADMIN" -> viewModel.showAdminStripeIssuingModal.value = true
-                        "RECEIPTS" -> showDriverReceiptExpenseScreen = true
-                        "TAX_CENTER" -> showDriverTaxCenterScreen = true
-                        "MEDIA_VAULT" -> showDeliveryMediaVaultScreen = true
-                        "BIZ_ACCOUNTING" -> showBusinessAccountingScreen = true
                         "EARNINGS", "BANKING" -> selectedNavTab = DriverNavigationTab.EARNINGS
                         "HISTORY", "MILEAGE" -> selectedNavTab = DriverNavigationTab.ACTIVITY
                         "MESSAGES" -> selectedNavTab = DriverNavigationTab.MESSAGES
@@ -652,8 +604,8 @@ fun DriverPortalScreen(
             )
         }
 
-        // Automated Priority Dispatch Ping Modal (Full details + Map View)
-        if (isDispatchActive && dispatchOffer != null) {
+        // Automated Priority Dispatch Ping Modal (Hidden during active delivery navigation)
+        if (activeOffer == null && isDispatchActive && dispatchOffer != null) {
             DriverDispatchPingModal(
                 offer = dispatchOffer!!,
                 timerSeconds = timerSeconds,
@@ -782,60 +734,17 @@ fun DriverPortalScreen(
                 }
             )
         }
-
-        // Dedicated Driver Receipt & Expense Tracker Overlay
-        if (showDriverReceiptExpenseScreen) {
-            DriverReceiptAndExpenseScreen(
+        // Gemini AI Real Order Dispatch Review Sheet (Hidden during active delivery navigation)
+        if (activeOffer == null && showAiOrderProcessingSheet && selectedRealOrderForAi != null) {
+            AiOrderDispatchSheet(
                 viewModel = viewModel,
-                onClose = { showDriverReceiptExpenseScreen = false },
-                onOpenTaxCenter = {
-                    showDriverReceiptExpenseScreen = false
-                    showDriverTaxCenterScreen = true
+                order = selectedRealOrderForAi,
+                analysis = aiOrderDispatchAnalysis,
+                isLoading = isAiProcessingOrder,
+                onDismiss = { viewModel.dismissAiOrderProcessingSheet() },
+                onAcceptAndStart = { order, analysis ->
+                    viewModel.dispatchRealOrderWithAi(order, analysis)
                 }
-            )
-        }
-
-        // Dedicated Driver Earnings & Tax Center Overlay
-        if (showDriverTaxCenterScreen) {
-            DriverEarningsAndTaxCenterScreen(
-                viewModel = viewModel,
-                onClose = { showDriverTaxCenterScreen = false },
-                onOpenExpenseTracker = {
-                    showDriverTaxCenterScreen = false
-                    showDriverReceiptExpenseScreen = true
-                }
-            )
-        }
-
-        // Dedicated Delivery Media Vault Overlay
-        if (showDeliveryMediaVaultScreen) {
-            DeliveryMediaVaultScreen(
-                viewModel = viewModel,
-                onClose = { showDeliveryMediaVaultScreen = false }
-            )
-        }
-
-        // Dedicated Business Expense Accounting & QuickBooks Overlay
-        if (showBusinessAccountingScreen) {
-            BusinessExpenseAccountingScreen(
-                viewModel = viewModel,
-                onClose = { showBusinessAccountingScreen = false }
-            )
-        }
-
-        // Dedicated Driver ShopSafe Commercial Card Overlay (Stripe Issuing)
-        if (showDriverShopSafeCardModal) {
-            DriverShopSafeCardScreen(
-                viewModel = viewModel,
-                onClose = { viewModel.showDriverShopSafeCardModal.value = false }
-            )
-        }
-
-        // Dedicated Admin Stripe Issuing Control Console
-        if (showAdminStripeIssuingModal) {
-            AdminStripeIssuingScreen(
-                viewModel = viewModel,
-                onClose = { viewModel.showAdminStripeIssuingModal.value = false }
             )
         }
     }

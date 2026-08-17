@@ -31,8 +31,9 @@ fun DriverActivityOverlay(
 ) {
     val completedDeliveries by viewModel.completedDeliveries.collectAsState()
     val mileageLogs by viewModel.allMileageLogs.collectAsState()
+    val realOrdersPending by viewModel.realOrdersPendingDispatch.collectAsState()
 
-    var activeSubTab by remember { mutableStateOf("DELIVERIES") } // DELIVERIES, MILEAGE_LOG
+    var activeSubTab by remember { mutableStateOf(if (realOrdersPending.isNotEmpty()) "REAL_ORDERS" else "DELIVERIES") } // REAL_ORDERS, DELIVERIES, MILEAGE_LOG
     var searchQuery by remember { mutableStateOf("") }
     var selectedDeliveryReceipt by remember { mutableStateOf<CompletedDelivery?>(null) }
 
@@ -110,7 +111,7 @@ fun DriverActivityOverlay(
         ) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Sub Tab Selector (Completed Deliveries vs Mileage Logs)
+            // Sub Tab Selector (Real Orders vs Completed Deliveries vs Mileage Logs)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -121,12 +122,48 @@ fun DriverActivityOverlay(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
+                        .background(if (activeSubTab == "REAL_ORDERS") Color(0xFF0284C7) else Color.Transparent)
+                        .clickable { activeSubTab = "REAL_ORDERS" }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Real Orders",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                        if (realOrdersPending.isNotEmpty()) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Surface(
+                                color = Color(0xFF10B981),
+                                shape = CircleShape,
+                                modifier = Modifier.size(16.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "${realOrdersPending.size}",
+                                        color = Color.White,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
                         .background(if (activeSubTab == "DELIVERIES") Color(0xFF0284C7) else Color.Transparent)
                         .clickable { activeSubTab = "DELIVERIES" }
                         .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Completed Deliveries (${completedDeliveries.size})", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("Trips (${completedDeliveries.size})", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 }
 
                 Box(
@@ -138,13 +175,149 @@ fun DriverActivityOverlay(
                         .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("IRS Mileage Log (${mileageLogs.size})", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("IRS Log (${mileageLogs.size})", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            if (activeSubTab == "DELIVERIES") {
+            if (activeSubTab == "REAL_ORDERS") {
+                if (realOrdersPending.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "All Real Orders Dispatched",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Gemini AI is actively listening for new customer orders placed in the app.",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 12.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 24.dp)
+                    ) {
+                        items(realOrdersPending) { order ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF0284C7).copy(alpha = 0.4f))
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Surface(
+                                                color = Color(0xFF0284C7).copy(alpha = 0.2f),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "REAL ORDER",
+                                                    color = Color(0xFF38BDF8),
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = order.storeOrSellerName,
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp
+                                            )
+                                        }
+
+                                        Text(
+                                            text = "$${String.format(java.util.Locale.US, "%.2f", order.total)}",
+                                            color = Color(0xFF10B981),
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 16.sp
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Text(
+                                        text = "Items: ${order.itemsSummary}",
+                                        color = Color(0xFFCBD5E1),
+                                        fontSize = 12.sp,
+                                        maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Text(
+                                        text = "Drop-off: ${order.dropoffAddress.ifBlank { "123 Main St, San Francisco, CA" }}",
+                                        color = Color(0xFF94A3B8),
+                                        fontSize = 11.sp
+                                    )
+
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = {
+                                                viewModel.processRealOrderWithAi(order)
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("AI Assessment", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                viewModel.dispatchRealOrderWithAi(order)
+                                                onBackToMap()
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Icon(Icons.Default.ElectricBolt, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("AI Dispatch", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (activeSubTab == "DELIVERIES") {
                 // Search Field
                 OutlinedTextField(
                     value = searchQuery,

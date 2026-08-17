@@ -23,6 +23,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.shopsafe.data.models.DriverProfile
 import com.example.shopsafe.ui.ShopSafeViewModel
+import com.example.shopsafe.ui.components.GoogleLogo
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import com.example.shopsafe.ui.utils.CardNumberVisualTransformation
 import com.example.shopsafe.ui.utils.ExpiryDateVisualTransformation
 import com.example.shopsafe.ui.utils.PhoneVisualTransformation
@@ -42,8 +46,8 @@ fun AuthModal(
     var selectedTab by remember { mutableStateOf(AuthTab.LOGIN) }
 
     // Login Fields
-    var loginEmail by remember { mutableStateOf("alex.rivera@example.com") }
-    var loginPassword by remember { mutableStateOf("••••••••") }
+    var loginEmail by remember { mutableStateOf("") }
+    var loginPassword by remember { mutableStateOf("") }
     var require2FA by remember { mutableStateOf(false) }
     var twoFactorCode by remember { mutableStateOf("") }
     var show2FAField by remember { mutableStateOf(false) }
@@ -176,29 +180,40 @@ fun AuthModal(
                     Text("Single Sign-On or Email Login", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Facebook Login Button
-                    Button(
-                        onClick = {
-                            viewModel.loginWithFacebook()
-                            onDismiss()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1877F2)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Facebook, contentDescription = null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text("Continue with Facebook", fontWeight = FontWeight.Bold, color = Color.White)
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
+                    // Social buttons
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.loginWithFacebook()
+                                onDismiss()
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .testTag("facebook_sign_in_button"),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Facebook,
+                                contentDescription = "Facebook Logo",
+                                tint = Color(0xFF1877F2),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Facebook",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1877F2),
+                                modifier = Modifier.semantics {
+                                    contentDescription = "Sign in with Facebook"
+                                }
+                            )
+                        }
                         OutlinedButton(
                             onClick = {
                                 viewModel.loginWithGoogle()
@@ -206,14 +221,27 @@ fun AuthModal(
                             },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(48.dp),
-                            shape = RoundedCornerShape(12.dp)
+                                .height(48.dp)
+                                .testTag("google_sign_in_button"),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Icon(Icons.Default.GMobiledata, contentDescription = "Google Logo Icon", tint = Color(0xFFEA4335))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Google", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            GoogleLogo(
+                                modifier = Modifier.semantics {
+                                    contentDescription = "Google Logo"
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Google",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFEA4335),
+                                modifier = Modifier.semantics {
+                                    contentDescription = "Sign in with Google"
+                                }
+                            )
                         }
-
                         OutlinedButton(
                             onClick = {
                                 viewModel.loginWithApple()
@@ -221,12 +249,27 @@ fun AuthModal(
                             },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(48.dp),
-                            shape = RoundedCornerShape(12.dp)
+                                .height(48.dp)
+                                .testTag("apple_sign_in_button"),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Icon(Icons.Default.PhoneIphone, contentDescription = "Apple Logo Icon", tint = Color.Black)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Apple ID", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Icon(
+                                painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.ic_apple_logo),
+                                contentDescription = "Apple Logo",
+                                tint = Color.Black,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Apple ID",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black,
+                                modifier = Modifier.semantics {
+                                    contentDescription = "Sign in with Apple ID"
+                                }
+                            )
                         }
                     }
 
@@ -244,7 +287,7 @@ fun AuthModal(
                     OutlinedTextField(
                         value = loginEmail,
                         onValueChange = { loginEmail = it },
-                        label = { Text("Email Address") },
+                        label = { Text("Email") },
                         leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -377,7 +420,7 @@ fun AuthModal(
                             OutlinedTextField(
                                 value = driverEmail,
                                 onValueChange = { driverEmail = it },
-                                label = { Text("Email Address") },
+                                label = { Text("Email") },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp)
                             )
@@ -395,7 +438,7 @@ fun AuthModal(
                             OutlinedTextField(
                                 value = driverPassword,
                                 onValueChange = { driverPassword = it },
-                                label = { Text("Password (Min 8 chars)") },
+                                label = { Text("Password") },
                                 visualTransformation = PasswordVisualTransformation(),
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(10.dp)

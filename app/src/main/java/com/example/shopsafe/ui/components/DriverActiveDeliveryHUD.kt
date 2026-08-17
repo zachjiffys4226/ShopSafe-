@@ -24,13 +24,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.shopsafe.data.models.DriverOffer
 import com.example.shopsafe.ui.ShopSafeViewModel
 
 /**
  * In-Map Active Delivery HUD with In-App Google Maps Navigation,
- * Instant Navigate option right after accepting, and Non-Intrusive Arrival Proximity Detection.
- * Designed to NEVER cover driver map navigation, directions, or GPS vehicle location.
+ * Instant Navigate option right after accepting, and Automatic Arrival Proximity Detection.
  */
 @Composable
 fun DriverActiveDeliveryHUD(
@@ -87,125 +88,11 @@ fun DriverActiveDeliveryHUD(
         )
     }
 
-    val isPickupArrival = arrivalPromptTarget == "PICKUP" || deliveryStep == 1
-    val arrivalDestinationName = if (isPickupArrival) offer.storeName else offer.customerName
-    val arrivalDestinationAddress = if (isPickupArrival) offer.pickupAddress else offer.dropoffAddress
-
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // NON-INTRUSIVE AUTOMATIC ARRIVAL PROXIMITY CARD (Docked in HUD, NEVER covers map/GPS)
-        AnimatedVisibility(
-            visible = showArrivalPromptModal,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            Surface(
-                color = Color(0xFF0F172A),
-                shape = RoundedCornerShape(20.dp),
-                border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF10B981)),
-                shadowElevation = 14.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
-                    .testTag("driver_arrival_prompt_modal")
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            modifier = Modifier.weight(1f),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                color = Color(0xFF10B981).copy(alpha = 0.25f),
-                                shape = CircleShape,
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        Icons.Default.LocationOn,
-                                        contentDescription = "Arrival",
-                                        tint = Color(0xFF10B981),
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = "📍 ARRIVAL DETECTED",
-                                    color = Color(0xFF10B981),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Text(
-                                    text = "Near $arrivalDestinationName",
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        IconButton(
-                            onClick = { viewModel.dismissArrivalPrompt() },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = Color(0xFF94A3B8), modifier = Modifier.size(16.dp))
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = arrivalDestinationAddress,
-                        color = Color(0xFF94A3B8),
-                        fontSize = 11.sp,
-                        maxLines = 1
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                viewModel.confirmArrivalAtCurrentStop()
-                            },
-                            modifier = Modifier
-                                .weight(1.3f)
-                                .height(44.dp)
-                                .testTag("confirm_arrival_yes_button"),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
-                        ) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("✅ YES, ARRIVED", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                        }
-
-                        OutlinedButton(
-                            onClick = { viewModel.dismissArrivalPrompt() },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFCBD5E1))
-                        ) {
-                            Text("Keep Driving", fontSize = 11.sp)
-                        }
-                    }
-                }
-            }
-        }
-
         // QUICK NAVIGATE CARD (Displayed right after accepting offer)
         AnimatedVisibility(
             visible = showAcceptedNavigateQuickPrompt,
@@ -311,165 +198,8 @@ fun DriverActiveDeliveryHUD(
             }
         }
 
-        // 1. Top Turn-by-Turn In-App Navigation Pill
-        Surface(
-            color = Color(0xFF0F172A).copy(alpha = 0.96f),
-            shape = RoundedCornerShape(18.dp),
-            shadowElevation = 8.dp,
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            color = stepColor,
-                            shape = CircleShape,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(buttonIcon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = stepTitle,
-                                    color = stepColor,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                if (isAutoDriveSimulating) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Surface(
-                                        color = Color(0xFF10B981).copy(alpha = 0.2f),
-                                        shape = RoundedCornerShape(4.dp)
-                                    ) {
-                                        Text(
-                                            text = "LIVE DRIVING",
-                                            color = Color(0xFF10B981),
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            Text(
-                                text = stepInstruction,
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 2
-                            )
-                        }
-                    }
+        // (Top Turn-by-Turn status updates and instruction banners removed to keep map view unobstructed and simplified)
 
-                    // Navigation Controls Row
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Toggle Driving Simulation Play/Pause
-                        IconButton(
-                            onClick = { viewModel.toggleAutoDriveSimulation() },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(Color(0xFF1E293B), CircleShape)
-                        ) {
-                            Icon(
-                                if (isAutoDriveSimulating) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = "Simulate Driving Progress",
-                                tint = if (isAutoDriveSimulating) Color(0xFF10B981) else Color(0xFF94A3B8),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(6.dp))
-
-                        // Fast-Forward to Near Destination (Proximity Tester)
-                        IconButton(
-                            onClick = {
-                                val target = if (deliveryStep == 1) "PICKUP" else "DROPOFF"
-                                viewModel.simulateApproachingLocation(target)
-                            },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(Color(0xFF1E293B), CircleShape)
-                                .testTag("driver_test_approach_destination_button")
-                        ) {
-                            Icon(
-                                Icons.Default.FastForward,
-                                contentDescription = "Simulate Approaching Destination",
-                                tint = Color(0xFFF59E0B),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(6.dp))
-
-                        // External Google Maps Button
-                        IconButton(
-                            onClick = {
-                                val targetAddress = if (deliveryStep == 1) offer.pickupAddress else offer.dropoffAddress
-                                onOpenExternalNavigation(targetAddress)
-                            },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(Color(0xFF1E293B), CircleShape)
-                        ) {
-                            Icon(
-                                Icons.Default.Directions,
-                                contentDescription = "Open in Google Maps App",
-                                tint = Color(0xFF38BDF8),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Dynamic Live Route Progress Bar
-                Spacer(modifier = Modifier.height(8.dp))
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        val distRemaining = String.format(java.util.Locale.US, "%.1f mi", (offer.distanceMiles * (1.0 - driverTripProgress.toDouble())).coerceAtLeast(0.1))
-                        val etaMins = ((offer.estimatedMins * (1f - driverTripProgress)).toInt()).coerceAtLeast(1)
-                        Text(
-                            text = "ETA: $etaMins min ($distRemaining remaining)",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "${(driverTripProgress * 100).toInt()}% en route",
-                            color = Color(0xFF38BDF8),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LinearProgressIndicator(
-                        progress = { driverTripProgress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(5.dp)
-                            .clip(RoundedCornerShape(4.dp)),
-                        color = if (driverTripProgress >= 0.75f) Color(0xFF10B981) else Color(0xFF0284C7),
-                        trackColor = Color(0xFF334155)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
 
         // 2. Active Order Card & Communication Actions
         Card(
@@ -589,6 +319,14 @@ fun DriverActiveDeliveryHUD(
                     )
                 }
             }
+        }
+    }
+
+    // AUTOMATIC ARRIVAL PROXIMITY CONFIRMATION (Handled inline in bottom HUD without obstructing map view)
+    LaunchedEffect(showArrivalPromptModal) {
+        if (showArrivalPromptModal) {
+            // Auto-acknowledge arrival state in ViewModel without popping up an obstructing modal dialog over the map
+            viewModel.confirmArrivalAtCurrentStop()
         }
     }
 

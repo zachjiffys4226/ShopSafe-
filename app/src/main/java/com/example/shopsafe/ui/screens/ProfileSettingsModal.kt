@@ -2,6 +2,7 @@ package com.example.shopsafe.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -36,6 +37,7 @@ fun ProfileSettingsModal(
 
     var isDriverModeEnabled by remember { mutableStateOf(appMode == AppMode.DRIVER_PORTAL) }
     var newAddressInput by remember { mutableStateOf("") }
+    var showProfileMenu by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
     LaunchedEffect(appMode) {
@@ -74,16 +76,36 @@ fun ProfileSettingsModal(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                color = Color(0xFF0284C7).copy(alpha = 0.1f),
-                                shape = CircleShape,
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = "User profile icon",
-                                        tint = Color(0xFF0284C7)
+                            Box {
+                                Surface(
+                                    color = Color(0xFF0284C7).copy(alpha = 0.1f),
+                                    shape = CircleShape,
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clickable { showProfileMenu = true }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Person,
+                                            contentDescription = "User profile icon (Tap for options)",
+                                            tint = Color(0xFF0284C7)
+                                        )
+                                    }
+                                }
+                                DropdownMenu(
+                                    expanded = showProfileMenu,
+                                    onDismissRequest = { showProfileMenu = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Log Out", fontWeight = FontWeight.Bold, color = Color(0xFFDC2626)) },
+                                        onClick = {
+                                            showProfileMenu = false
+                                            viewModel.logoutUser()
+                                            onClose()
+                                        },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Logout, contentDescription = null, tint = Color(0xFFDC2626))
+                                        }
                                     )
                                 }
                             }
@@ -541,16 +563,37 @@ fun ProfileSettingsModal(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Close Button
-                    Button(
-                        onClick = onClose,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 50.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A))
+                    // Bottom Actions (Log Out & Done)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(LocalizedStrings.get("done", currentLanguage), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.logoutUser()
+                                onClose()
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626))
+                        ) {
+                            Icon(Icons.Default.Logout, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Log Out", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+
+                        Button(
+                            onClick = onClose,
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A))
+                        ) {
+                            Text(LocalizedStrings.get("done", currentLanguage), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
+                        }
                     }
                 }
             }
